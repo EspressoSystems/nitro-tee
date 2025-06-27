@@ -43,6 +43,13 @@ precompile_names = AddressTable Aggregator BLS Debug FunctionTable GasInfo Info 
 precompiles = $(patsubst %,./solgen/generated/%.go, $(precompile_names))
 
 output_root=target
+export PKG_CONFIG_PATH=$(abspath $(output_root)/pkgconfig)
+# For nix pkg-config
+ifdef IN_NIX_SHELL
+  export PKG_CONFIG_PATH_FOR_TARGET := $(abspath $(output_root)/pkgconfig):$(PKG_CONFIG_PATH_FOR_TARGET)
+endif
+
+sed_escaped_output_root:=$(subst /,\/,$(output_root))
 output_latest=$(output_root)/machines/latest
 
 repo_dirs = arbos arbcompress arbnode arbutil arbstate cmd das precompiles solgen system_tests util validator wavmio
@@ -159,6 +166,34 @@ CBROTLI_WASM_BUILD_ARGS ?=-d
 
 # user targets
 
+aws_nsm_dir = ./aws-nitro-enclaves-nsm-api
+aws_nsm_files = $(wildcard $(aws_nsm_dir)/*.toml $(aws_nsm_dir)/src/*.rs)
+aws_nsm_lib = $(output_root)/lib/libnsm.a
+
+.PHONY: build-aws-nsm-lib
+build-aws-nsm-lib: $(aws_nsm_lib)
+
+$(aws_nsm_lib): $(DEP_PREDICATE) $(aws_nsm_files)
+	mkdir -p `dirname $(aws_nsm_lib)`
+	cargo build --release --manifest-path $(aws_nsm_dir)/Cargo.toml -p nsm-lib
+	install $(aws_nsm_dir)/target/release/libnsm.a $@
+	mkdir -p $(output_root)/pkgconfig
+	cp ./pkgconfig/libnsm.pc $(output_root)/pkgconfig
+
+aws_nsm_dir = ./aws-nitro-enclaves-nsm-api
+aws_nsm_files = $(wildcard $(aws_nsm_dir)/*.toml $(aws_nsm_dir)/src/*.rs)
+aws_nsm_lib = $(output_root)/lib/libnsm.a
+
+.PHONY: build-aws-nsm-lib
+build-aws-nsm-lib: $(aws_nsm_lib)
+
+$(aws_nsm_lib): $(DEP_PREDICATE) $(aws_nsm_files)
+	mkdir -p `dirname $(aws_nsm_lib)`
+	cargo build --release --manifest-path $(aws_nsm_dir)/Cargo.toml -p nsm-lib
+	install $(aws_nsm_dir)/target/release/libnsm.a $@
+	mkdir -p $(output_root)/pkgconfig
+	cp ./pkgconfig/libnsm.pc $(output_root)/pkgconfig
+
 .PHONY: push
 push: lint test-go .make/fmt
 	@printf "%bdone building %s%b\n" $(color_pink) $$(expr $$(echo $? | wc -w) - 1) $(color_reset)
@@ -173,7 +208,10 @@ build: $(patsubst %,$(output_root)/bin/%, nitro deploy relay daprovider daserver
 	@printf $(done)
 
 .PHONY: build-node-deps
-build-node-deps: $(go_source) build-prover-header build-prover-lib build-jit .make/solgen .make/cbrotli-lib
+build-node-deps: $(go_source) build-prover-header build-prover-lib build-jit .make/solgen .make/cbrotli-lib build-aws-nsm-lib
+	@for file in $(output_root)/pkgconfig/*.pc; do \
+		sed -i 's/\/path\/to\/lib/$(sed_escaped_output_root)\/lib/g' "$$file"; \
+	done
 
 .PHONY: test-go-deps
 test-go-deps: \
@@ -298,6 +336,12 @@ clean:
 	@rm -rf contracts-legacy/build contracts-legacy/cache
 	@rm -rf contracts-local/out contracts-local/forge-cache
 	@rm -f .make/*
+	rm -rf brotli/buildfiles
+	cargo clean --manifest-path $(aws_nsm_dir)/Cargo.toml
+
+# Ensure lib64 is a symlink to lib
+	mkdir -p $(output_root)/lib
+	ln -s lib $(output_root)/lib64
 
 .PHONY: docker
 docker:

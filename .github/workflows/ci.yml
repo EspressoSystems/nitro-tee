@@ -13,8 +13,10 @@ on:
 jobs:
   test:
     name: Go Tests
-    runs-on: arbitrator-ci
-
+    runs-on: ubuntu-latest
+    env:
+      PKG_CONFIG_PATH: ${{ github.workspace }}/target/pkgconfig 
+      
     # Creates a redis container for redis tests
     services:
       redis:

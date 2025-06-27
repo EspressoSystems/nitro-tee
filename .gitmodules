@@ -47,3 +47,7 @@
 [submodule "contracts-local/src/precompiles"]
 	path = contracts-local/src/precompiles
 	url = https://github.com/OffchainLabs/nitro-precompile-interfaces.git
+
+[submodule "aws-nitro-enclaves-nsm-api"]
+	path = aws-nitro-enclaves-nsm-api
+	url = https://github.com/aws/aws-nitro-enclaves-nsm-api.git
